@@ -4,12 +4,14 @@ import { MaxLengthPipe, MinLengthPipe, PasswordPipe } from './pipe/password.pipe
 import { BasicTokenGuard } from './guard/basic-token.gard';
 import { AccessTokenGuard, RefreshTokenGuard } from './guard/bearer-token.guard';
 import { RegisterUserDto } from './dto/register-user.dto';
+import { IsPublic } from 'src/common/decorator/is-public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login/email')
+  @IsPublic()
   @UseGuards(BasicTokenGuard)
   loginEmail(
     @Headers('authorization') rawToken: string,
@@ -21,6 +23,7 @@ export class AuthController {
   }
 
   @Post('register/email')
+  @IsPublic()
   registerEmail(
     @Body() body: RegisterUserDto,
   ){
@@ -28,6 +31,7 @@ export class AuthController {
   }
 
   @Post('token/access')
+  @IsPublic()
   @UseGuards(RefreshTokenGuard)
   postTokenAccess(@Headers('authorization') rawToken: string){
     const token = this.authService.extractTokenFromHeader(rawToken, true);

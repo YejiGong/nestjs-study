@@ -26,8 +26,15 @@ import { PaginatePostDto } from './dto/paginate-post.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { domainToASCII } from 'url';
 import { ImageModelType } from 'src/common/entities/image.entity';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryRunner as QR } from 'typeorm';
 import { PostsImagesService } from './image/images.service';
+import { LogInterceptor } from 'src/common/interceptor/log.interceptor';
+import { TransactionInterceptor } from 'src/common/interceptor/transaction.interceptor';
+import { QueryRunner } from 'src/common/decorator/query-runner.decorator';
+import { Roles } from 'src/users/decorator/roles.decorator';
+import { RolesEnum } from 'src/users/const/roles.const';
+import { IsPublic } from 'src/common/decorator/is-public.decorator';
+import { IsPostMineOrAdminGuard } from './guard/is-post-mine-or-admin.guard';
 
 
 
@@ -39,6 +46,8 @@ export class PostsController {
   ) {}
 
   @Get()
+  @IsPublic()
+  @UseInterceptors(LogInterceptor)
   getPosts(
     @Query() query: PaginatePostDto,
   ) {
@@ -46,32 +55,27 @@ export class PostsController {
   }
 
   @Post('random')
-  @UseGuards(AccessTokenGuard)
   async postPostRandom(@User() user: UsersModel){
     await this.postsService.generatePosts(user.id);
     return true;
   }
 
   @Get(':id')
+  @IsPublic()
   getPost(@Param('id', ParseIntPipe) id: number) {
     return this.postsService.getPostById(id);
   }
 
   @Post()
-  @UseGuards(AccessTokenGuard)
   @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(TransactionInterceptor)
   async postPosts(
     @User('id') userId: number,
     @Body() body: CreatePostDto,
+    @QueryRunner() qr: QR,
   ){
 
-    const qr = this.dataSource.createQueryRunner();
 
-    await qr.connect();
-
-    await qr.startTransaction();
-
-    try{
     const post = await this.postsService.createPost(userId,body, qr);
 
     for(let i=0; i<body.images.length; i++){
@@ -82,26 +86,21 @@ export class PostsController {
         type: ImageModelType.POST_IMAGE,
       });
     }
-    await qr.commitTransaction();
-    await qr.release();
 
-    return this.postsService.getPostById(post.id);
-  }catch(e){
-    await qr.rollbackTransaction();
-    await qr.release();
-
-    throw new InternalServerErrorException('에러가 발생했습니다.');
-  }
+    return this.postsService.getPostById(post.id, qr);
   }
 
-  @Patch(':id')
-  patchPost(@Param('id', ParseIntPipe) id: number,
+  @Patch(':postId')
+  @UseGuards(IsPostMineOrAdminGuard)
+  patchPost(@Param('postId', ParseIntPipe) id: number,
     @Body() body: UpdatePostDto
   ){
     return this.postsService.updatePost(id, body);
   }
 
   @Delete(':id')
+  @UseGuards(AccessTokenGuard)
+  @Roles(RolesEnum.ADMIN)
   deletePost(@Param('id', ParseIntPipe) id: number) {
     return this.postsService.deletePost(id);
   }

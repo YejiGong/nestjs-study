@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { FindOptionsWhere, LessThan, MoreThan, QueryRunner, Repository } from 'typeorm';
+import { FindOptionsWhere, LessThan, MoreThan, QueryResult, QueryRunner, Repository } from 'typeorm';
 import { PostsModel } from './entities/posts.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -13,6 +13,7 @@ import { basename, join } from 'path';
 import { CreatePostImageDto } from './image/dto/create-image.dto';
 import { ImageModel } from 'src/common/entities/image.entity';
 import { DEFAULT_POST_FIND_OPTIONS } from './const/default-post-find-options.const';
+
 
 @Injectable()
 export class PostsService {
@@ -53,8 +54,9 @@ export class PostsService {
     }
 
 
-    async getPostById(id: number){
-        const post = await this.postsRepository.findOne({
+    async getPostById(id: number, qr?: QueryRunner){
+        const repository = this.getRepository(qr);
+        const post = await repository.findOne({
             where:{
                 id,
             },
@@ -125,4 +127,42 @@ export class PostsService {
         await this.postsRepository.delete(postId);
         return postId;
     }
+
+    checkPostsExistsById(id: number){
+        return this.postsRepository.exists({
+            where:{
+                id,
+            }
+        });
+    }
+
+    async isPostMine(userId: number, postId: number){
+        return this.postsRepository.exists({
+            where:{
+                id:postId,
+                author:{
+                    id:userId,
+                }
+            },
+            relations:{
+                author: true
+            }
+        })
+    }
+
+    async incrementCommentCount(postId: number, qr?: QueryRunner){
+        const repository =  this.getRepository(qr);
+        
+        await repository.increment({
+          id:postId
+        }, 'commentCount', 1)
+      }
+    
+      async decrementCommentCount(postId: number, qr?: QueryRunner){
+        const repository = this.getRepository(qr);
+        
+        await repository.decrement({
+          id:postId
+        }, 'commentCount', 1)
+      }
 }
